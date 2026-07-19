@@ -1,0 +1,35 @@
+[package]
+name = "cert-extractor"
+version = "0.1.0"
+description = "Inspect and export certificates presented by TLS servers"
+authors = ["cert-extractor contributors"]
+edition = "2021"
+
+[lib]
+name = "cert_extractor_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+base64 = "0.22"
+hex = "0.4"
+idna = "1"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-native-certs = "0.8"
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"
+tauri = { version = "2", features = [] }
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+thiserror = "2"
+tokio = { version = "1", features = ["net", "rt-multi-thread", "time"] }
+tokio-rustls = "0.26"
+uuid = { version = "1", features = ["v4", "serde"] }
+x509-parser = "0.18"
+
+[dev-dependencies]
+pretty_assertions = "1"
+rcgen = "0.14"
