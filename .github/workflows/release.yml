@@ -1,0 +1,56 @@
+name: Release Windows
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  build-windows:
+    name: Build and upload Windows assets
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Windows executable and NSIS installer
+        run: npm run tauri build -- --bundles nsis
+
+      - name: Upload Windows files to the GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          $assets = @(
+            "src-tauri/target/release/cert-extractor.exe"
+          )
+          $assets += Get-ChildItem "src-tauri/target/release/bundle/nsis/*.exe" | ForEach-Object { $_.FullName }
+
+          foreach ($asset in $assets) {
+            if (-not (Test-Path $asset)) {
+              throw "Release asset not found: $asset"
+            }
+            gh release upload $env:RELEASE_TAG $asset --clobber
+          }
