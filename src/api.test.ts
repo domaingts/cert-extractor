@@ -13,7 +13,15 @@ vi.mock("@tauri-apps/api/core", () => {
   };
 });
 
-import { extractCertificates, generateExport } from "./api";
+import { extractCertificates, generateExport, normalizeApiError } from "./api";
+
+const structuredError = {
+  code: "dns_failed",
+  stage: "resolving_dns",
+  message: { key: "backend.error.dnsFailed" },
+  technicalDetail: "lookup failed",
+  retryable: true,
+};
 
 describe("Tauri API wrapper", () => {
   beforeEach(() => invokeMock.mockReset());
@@ -41,5 +49,16 @@ describe("Tauri API wrapper", () => {
       certificateIndices: [2, 0],
       format: "c_expression",
     });
+  });
+
+  it("normalizes structured and JSON-encoded API errors", () => {
+    expect(normalizeApiError(structuredError)).toEqual({ apiError: structuredError, technicalFallback: null });
+    expect(normalizeApiError(JSON.stringify(structuredError))).toEqual({ apiError: structuredError, technicalFallback: null });
+  });
+
+  it("retains plain and JavaScript errors as technical fallbacks", () => {
+    expect(normalizeApiError("plain failure")).toEqual({ apiError: null, technicalFallback: "plain failure" });
+    expect(normalizeApiError(new Error("JavaScript failure"))).toEqual({ apiError: null, technicalFallback: "JavaScript failure" });
+    expect(normalizeApiError({ nope: true })).toEqual({ apiError: null, technicalFallback: null });
   });
 });

@@ -6,12 +6,21 @@ use sha2::{Digest, Sha256};
 use x509_parser::extensions::GeneralName;
 use x509_parser::parse_x509_certificate;
 
+use crate::ui_message::UiMessage;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CertificateWarning {
+    pub message: UiMessage,
+    pub technical_detail: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct CertificateMetadata {
     pub index: usize,
     pub role: String,
-    pub subject: String,
-    pub issuer: String,
+    pub subject: Option<String>,
+    pub issuer: Option<String>,
     pub serial_number: String,
     pub valid_from: String,
     pub valid_until: String,
@@ -22,7 +31,7 @@ pub struct CertificateMetadata {
     pub public_key_algorithm: String,
     pub is_ca: bool,
     pub der_size: usize,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<CertificateWarning>,
 }
 
 pub fn parse_certificate(index: usize, der: &[u8]) -> CertificateMetadata {
@@ -37,8 +46,8 @@ pub fn parse_certificate(index: usize, der: &[u8]) -> CertificateMetadata {
         return CertificateMetadata {
             index,
             role: if index == 0 { "leaf" } else { "certificate" }.into(),
-            subject: "Unable to parse certificate subject".into(),
-            issuer: "Unable to parse certificate issuer".into(),
+            subject: None,
+            issuer: None,
             serial_number: String::new(),
             valid_from: String::new(),
             valid_until: String::new(),
@@ -49,9 +58,10 @@ pub fn parse_certificate(index: usize, der: &[u8]) -> CertificateMetadata {
             public_key_algorithm: String::new(),
             is_ca: false,
             der_size: der.len(),
-            warnings: vec![
-                "The certificate was captured but its metadata could not be parsed.".into(),
-            ],
+            warnings: vec![CertificateWarning {
+                message: UiMessage::new("backend.warning.metadataParseFailed"),
+                technical_detail: None,
+            }],
         };
     };
 
@@ -104,16 +114,17 @@ pub fn parse_certificate(index: usize, der: &[u8]) -> CertificateMetadata {
             }
         }
         Ok(None) => {}
-        Err(error) => warnings.push(format!(
-            "Subject alternative names could not be parsed: {error}"
-        )),
+        Err(error) => warnings.push(CertificateWarning {
+            message: UiMessage::new("backend.warning.subjectAltNamesParseFailed"),
+            technical_detail: Some(error.to_string()),
+        }),
     }
 
     CertificateMetadata {
         index,
         role: role.into(),
-        subject: certificate.subject().to_string(),
-        issuer: certificate.issuer().to_string(),
+        subject: Some(certificate.subject().to_string()),
+        issuer: Some(certificate.issuer().to_string()),
         serial_number: certificate.raw_serial_as_string(),
         valid_from: validity.not_before.to_string(),
         valid_until: validity.not_after.to_string(),
@@ -125,5 +136,21 @@ pub fn parse_certificate(index: usize, der: &[u8]) -> CertificateMetadata {
         is_ca,
         der_size: der.len(),
         warnings,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_certificate;
+
+    #[test]
+    fn parse_failure_uses_structured_warning_and_nullable_names() {
+        let metadata = parse_certificate(0, &[1, 2, 3]);
+        assert!(metadata.subject.is_none());
+        assert!(metadata.issuer.is_none());
+        assert_eq!(
+            metadata.warnings[0].message.key,
+            "backend.warning.metadataParseFailed"
+        );
     }
 }

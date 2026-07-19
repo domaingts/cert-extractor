@@ -11,6 +11,7 @@ A Windows desktop application built with Rust and Tauri that inspects the certif
 - Select individual certificates or export the full server-presented chain.
 - Save canonical PEM with CRLF (`\r\n`) line endings.
 - Copy or save a C-style concatenated string representation.
+- Use the interface in English, Simplified Chinese, or Traditional Chinese.
 
 The app exports the **server-presented chain**. Most servers do not send their root certificate, and the app does not fabricate or download missing certificates.
 
@@ -43,6 +44,16 @@ The result is an expression fragment, without a variable declaration or semicolo
 Certificate extraction intentionally continues when PKI validation fails so administrators and developers can inspect broken endpoints. The TLS peer must still prove possession of the private key during the handshake, but certificate trust and hostname errors do not prevent chain capture. The result screen clearly distinguishes a trusted connection from an inspection result and shows the validation warning before export.
 
 The app sends no HTTP request or application data to the remote service.
+
+## Languages
+
+The application supports English, Simplified Chinese, and Traditional Chinese. On first launch it follows the operating-system/WebView language when supported and otherwise falls back to English. Choosing a language in the application header saves that explicit preference for future launches.
+
+Interface labels, progress, validation summaries, and actionable errors are translated. Certificate subjects, issuers, SANs, cryptographic identifiers, network addresses, exported content, filesystem paths, and raw operating-system or TLS diagnostics remain unchanged so technical data is never altered by localization.
+
+The Windows NSIS installer contains all three languages and displays a language selector before installation. The installer language and the application's saved language preference are independent.
+
+English defines the required translation-key set in `src/locales/en.ts`; the Chinese catalogs must satisfy the same TypeScript catalog type.
 
 ## Development prerequisites
 

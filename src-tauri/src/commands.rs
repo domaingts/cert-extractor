@@ -7,6 +7,7 @@ use crate::error::ApiError;
 use crate::output::{c_expression_for_certificates, pem_for_certificates, select_certificates};
 use crate::state::{AppState, ExtractionSession};
 use crate::tls::{self, ValidationResult};
+use crate::ui_message::UiMessage;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,8 +21,8 @@ pub struct ExtractionRequest {
 pub struct ExtractionProgress {
     pub sequence: u32,
     pub stage: String,
-    pub message: String,
-    pub detail: Option<String>,
+    pub message: UiMessage,
+    pub technical_detail: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -29,8 +30,8 @@ pub struct ExtractionResult {
     pub session_id: Uuid,
     pub endpoint: String,
     pub connected_address: String,
-    pub tls_version: String,
-    pub cipher_suite: String,
+    pub tls_version: Option<String>,
+    pub cipher_suite: Option<String>,
     pub validation: ValidationResult,
     pub certificates: Vec<CertificateMetadata>,
 }
@@ -59,7 +60,7 @@ pub async fn extract_certificates(
         ApiError::new(
             "busy",
             "validating_input",
-            "A certificate extraction is already running.",
+            UiMessage::new("backend.error.extractionBusy"),
             None,
             true,
         )
@@ -67,27 +68,28 @@ pub async fn extract_certificates(
 
     *state.current_session.write().await = None;
     let mut sequence = 0_u32;
-    let mut send_progress = |stage: &str, message: String| {
+    let mut send_progress = |stage: &str, message: UiMessage| {
         sequence += 1;
         let _ = progress.send(ExtractionProgress {
             sequence,
             stage: stage.into(),
             message,
-            detail: None,
+            technical_detail: None,
         });
     };
 
-    send_progress("validating_input", "Validating the server address".into());
+    send_progress(
+        "validating_input",
+        UiMessage::new("backend.progress.validatingAddress"),
+    );
     let endpoint = crate::endpoint::Endpoint::parse(&request.hostname, request.port)?;
     let endpoint_display = endpoint.display();
     let extracted = tls::extract(&endpoint, &mut send_progress).await?;
 
     send_progress(
         "parsing_certificates",
-        format!(
-            "Reading metadata for {} certificate(s)",
-            extracted.certificates.len()
-        ),
+        UiMessage::new("backend.progress.readingMetadata")
+            .number("count", extracted.certificates.len()),
     );
     let metadata: Vec<CertificateMetadata> = extracted
         .certificates
@@ -105,7 +107,7 @@ pub async fn extract_certificates(
 
     send_progress(
         "complete",
-        format!("Captured {} certificate(s)", metadata.len()),
+        UiMessage::new("backend.progress.captured").number("count", metadata.len()),
     );
     Ok(ExtractionResult {
         session_id,
@@ -130,7 +132,7 @@ pub async fn generate_export(
         ApiError::new(
             "stale_session",
             "generating_export",
-            "Run the extraction again before exporting certificates.",
+            UiMessage::new("backend.error.noCurrentSession"),
             None,
             true,
         )
@@ -139,7 +141,7 @@ pub async fn generate_export(
         return Err(ApiError::new(
             "stale_session",
             "generating_export",
-            "These results are no longer current. Run the extraction again.",
+            UiMessage::new("backend.error.staleSession"),
             None,
             true,
         ));

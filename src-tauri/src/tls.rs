@@ -14,6 +14,7 @@ use tokio_rustls::TlsConnector;
 
 use crate::endpoint::Endpoint;
 use crate::error::ApiError;
+use crate::ui_message::UiMessage;
 
 const DNS_TIMEOUT: Duration = Duration::from_secs(10);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -23,16 +24,17 @@ const VALIDATION_TIMEOUT: Duration = Duration::from_secs(10);
 #[derive(Debug, Clone, Serialize)]
 pub struct ConnectionSummary {
     pub connected_address: String,
-    pub tls_version: String,
-    pub cipher_suite: String,
+    pub tls_version: Option<String>,
+    pub cipher_suite: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ValidationResult {
     pub status: String,
-    pub message: String,
-    pub detail: Option<String>,
+    pub message: UiMessage,
+    pub detail_message: Option<UiMessage>,
+    pub technical_detail: Option<String>,
 }
 
 #[derive(Debug)]
@@ -96,9 +98,12 @@ impl ServerCertVerifier for InspectionVerifier {
 
 pub async fn extract<F>(endpoint: &Endpoint, mut progress: F) -> Result<TlsExtraction, ApiError>
 where
-    F: FnMut(&str, String),
+    F: FnMut(&str, UiMessage),
 {
-    progress("resolving_dns", format!("Resolving {}", endpoint.host));
+    progress(
+        "resolving_dns",
+        UiMessage::new("backend.progress.resolvingHost").text("host", &endpoint.host),
+    );
     let addresses = timeout(
         DNS_TIMEOUT,
         lookup_host((endpoint.host.as_str(), endpoint.port)),
@@ -108,7 +113,7 @@ where
         ApiError::new(
             "dns_timeout",
             "resolving_dns",
-            "DNS resolution timed out.",
+            UiMessage::new("backend.error.dnsTimeout"),
             None,
             true,
         )
@@ -117,7 +122,7 @@ where
         ApiError::new(
             "dns_failed",
             "resolving_dns",
-            "The hostname could not be resolved.",
+            UiMessage::new("backend.error.dnsFailed"),
             Some(error.to_string()),
             true,
         )
@@ -130,7 +135,7 @@ where
         return Err(ApiError::new(
             "no_addresses",
             "resolving_dns",
-            "The hostname did not resolve to an address.",
+            UiMessage::new("backend.error.noResolvedAddresses"),
             None,
             true,
         ));
@@ -139,7 +144,11 @@ where
     let mut last_error = None;
     let mut connected = None;
     for address in unique {
-        progress("connecting", format!("Connecting to {address}"));
+        progress(
+            "connecting",
+            UiMessage::new("backend.progress.connectingAddress")
+                .text("address", address.to_string()),
+        );
         match timeout(CONNECT_TIMEOUT, TcpStream::connect(address)).await {
             Ok(Ok(stream)) => {
                 let _ = stream.set_nodelay(true);
@@ -154,7 +163,7 @@ where
         ApiError::new(
             "connection_failed",
             "connecting",
-            "Could not connect to the server.",
+            UiMessage::new("backend.error.connectionFailed"),
             last_error,
             true,
         )
@@ -162,7 +171,8 @@ where
 
     progress(
         "negotiating_tls",
-        format!("Negotiating TLS with {connected_address}"),
+        UiMessage::new("backend.progress.negotiatingTls")
+            .text("address", connected_address.to_string()),
     );
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let verifier = Arc::new(InspectionVerifier {
@@ -185,7 +195,7 @@ where
         ApiError::new(
             "tls_timeout",
             "negotiating_tls",
-            "The TLS handshake timed out.",
+            UiMessage::new("backend.error.tlsTimeout"),
             None,
             true,
         )
@@ -194,7 +204,7 @@ where
         ApiError::new(
             "tls_protocol_failed",
             "negotiating_tls",
-            "The server did not complete a usable TLS handshake.",
+            UiMessage::new("backend.error.tlsHandshakeFailed"),
             Some(error.to_string()),
             true,
         )
@@ -205,7 +215,7 @@ where
         ApiError::new(
             "empty_certificate_chain",
             "capturing_chain",
-            "The server did not present a certificate.",
+            UiMessage::new("backend.error.emptyCertificateChain"),
             None,
             false,
         )
@@ -214,7 +224,7 @@ where
         return Err(ApiError::new(
             "empty_certificate_chain",
             "capturing_chain",
-            "The server did not present a certificate.",
+            UiMessage::new("backend.error.emptyCertificateChain"),
             None,
             false,
         ));
@@ -228,17 +238,15 @@ where
         connected_address: connected_address.to_string(),
         tls_version: connection
             .protocol_version()
-            .map(|version| format!("{version:?}"))
-            .unwrap_or_else(|| "Unknown".into()),
+            .map(|version| format!("{version:?}")),
         cipher_suite: connection
             .negotiated_cipher_suite()
-            .map(|suite| format!("{:?}", suite.suite()))
-            .unwrap_or_else(|| "Unknown".into()),
+            .map(|suite| format!("{:?}", suite.suite())),
     };
 
     progress(
         "validating_certificate",
-        "Checking the captured chain against the operating system trust store".into(),
+        UiMessage::new("backend.progress.checkingSystemTrust"),
     );
     let validation_endpoint = endpoint.clone();
     let validation_certificates: Vec<CertificateDer<'static>> = certificates
@@ -257,13 +265,15 @@ where
         Ok(Ok(result)) => result,
         Ok(Err(error)) => ValidationResult {
             status: "validation_failed".into(),
-            message: "The certificate was extracted, but trust validation could not be completed. Export remains available for inspection.".into(),
-            detail: Some(error.to_string()),
+            message: UiMessage::new("backend.validation.operationFailed"),
+            detail_message: None,
+            technical_detail: Some(error.to_string()),
         },
         Err(_) => ValidationResult {
             status: "validation_failed".into(),
-            message: "The certificate was extracted, but trust validation timed out. Export remains available for inspection.".into(),
-            detail: None,
+            message: UiMessage::new("backend.validation.timedOut"),
+            detail_message: None,
+            technical_detail: None,
         },
     };
 
@@ -289,10 +299,9 @@ fn validate_chain(endpoint: &Endpoint, certificates: &[CertificateDer<'_>]) -> V
         Err(error) => {
             return ValidationResult {
                 status: "validation_failed".into(),
-                message:
-                    "The certificate was extracted, but trust validation could not be initialized."
-                        .into(),
-                detail: Some(error.to_string()),
+                message: UiMessage::new("backend.validation.initializationFailed"),
+                detail_message: None,
+                technical_detail: Some(error.to_string()),
             };
         }
     };
@@ -308,47 +317,37 @@ fn validate_chain(endpoint: &Endpoint, certificates: &[CertificateDer<'_>]) -> V
     match result {
         Ok(_) => ValidationResult {
             status: "trusted".into(),
-            message: "The server-presented chain is trusted for this hostname.".into(),
-            detail: if root_error_count == 0 {
-                None
-            } else {
-                Some(format!(
-                    "Some operating system trust anchors could not be loaded: {root_error_count}"
-                ))
-            },
+            message: UiMessage::new("backend.validation.trusted"),
+            detail_message: (root_error_count > 0).then(|| {
+                UiMessage::new("backend.validation.trustAnchorsSkipped")
+                    .number("count", root_error_count)
+            }),
+            technical_detail: None,
         },
         Err(error) => {
             let detail = error.to_string();
             let normalized = format!("{error:?} {detail}").to_ascii_lowercase();
-            let (status, message) = if normalized.contains("notvalidforname")
+            let (status, message_key) = if normalized.contains("notvalidforname")
                 || normalized.contains("not valid for name")
             {
-                (
-                    "hostname_mismatch",
-                    "The certificate is not valid for this hostname.",
-                )
+                ("hostname_mismatch", "backend.validation.hostnameMismatch")
             } else if normalized.contains("notvalidyet") || normalized.contains("not valid yet") {
-                ("not_yet_valid", "The certificate is not valid yet.")
+                ("not_yet_valid", "backend.validation.notYetValid")
             } else if normalized.contains("expired") {
-                ("expired", "The certificate has expired.")
+                ("expired", "backend.validation.expired")
             } else if normalized.contains("revoked") {
-                ("revoked", "The certificate has been revoked.")
+                ("revoked", "backend.validation.revoked")
             } else if normalized.contains("unknownissuer") || normalized.contains("unknown issuer")
             {
-                (
-                    "untrusted",
-                    "The certificate chain is not trusted by the operating system.",
-                )
+                ("untrusted", "backend.validation.untrusted")
             } else {
-                (
-                    "validation_failed",
-                    "The extracted certificate chain did not pass trust validation.",
-                )
+                ("validation_failed", "backend.validation.failed")
             };
             ValidationResult {
                 status: status.into(),
-                message: format!("{message} Export remains available for inspection."),
-                detail: Some(detail),
+                message: UiMessage::new(message_key),
+                detail_message: None,
+                technical_detail: Some(detail),
             }
         }
     }

@@ -17,13 +17,13 @@ impl Endpoint {
         if host.is_empty() {
             return Err(ApiError::invalid(
                 "invalid_hostname",
-                "Enter a hostname or IP address.",
+                "backend.error.hostnameRequired",
             ));
         }
         if port == 0 {
             return Err(ApiError::invalid(
                 "invalid_port",
-                "Port must be between 1 and 65535.",
+                "backend.error.invalidPort",
             ));
         }
         if host.contains("://")
@@ -34,7 +34,7 @@ impl Endpoint {
         {
             return Err(ApiError::invalid(
                 "invalid_hostname",
-                "Enter only a hostname or IP address, without a URL scheme, path, or credentials.",
+                "backend.error.hostnameUrlNotAllowed",
             ));
         }
 
@@ -42,7 +42,7 @@ impl Endpoint {
             if !(host.starts_with('[') && host.ends_with(']')) {
                 return Err(ApiError::invalid(
                     "invalid_hostname",
-                    "The IPv6 address has invalid brackets.",
+                    "backend.error.invalidIpv6Brackets",
                 ));
             }
             host = &host[1..host.len() - 1];
@@ -54,16 +54,16 @@ impl Endpoint {
             if host.contains(':') {
                 return Err(ApiError::invalid(
                     "invalid_hostname",
-                    "Enter the port in the separate port field.",
+                    "backend.error.embeddedPort",
                 ));
             }
             let without_dot = host.strip_suffix('.').unwrap_or(host);
             let ascii = idna::domain_to_ascii(without_dot).map_err(|_| {
-                ApiError::invalid("invalid_hostname", "The hostname is not a valid DNS name.")
+                ApiError::invalid("invalid_hostname", "backend.error.invalidDnsName")
             })?;
             let normalized = ascii.to_ascii_lowercase();
             let server_name = ServerName::try_from(normalized.clone()).map_err(|_| {
-                ApiError::invalid("invalid_hostname", "The hostname is not a valid DNS name.")
+                ApiError::invalid("invalid_hostname", "backend.error.invalidDnsName")
             })?;
             (normalized, server_name)
         };
@@ -104,7 +104,10 @@ mod tests {
 
     #[test]
     fn rejects_urls_and_embedded_ports() {
-        assert!(Endpoint::parse("https://example.com", 443).is_err());
-        assert!(Endpoint::parse("example.com:443", 443).is_err());
+        let url_error = Endpoint::parse("https://example.com", 443).unwrap_err();
+        assert_eq!(url_error.message.key, "backend.error.hostnameUrlNotAllowed");
+
+        let port_error = Endpoint::parse("example.com:443", 443).unwrap_err();
+        assert_eq!(port_error.message.key, "backend.error.embeddedPort");
     }
 }

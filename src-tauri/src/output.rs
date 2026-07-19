@@ -57,7 +57,7 @@ pub fn select_certificates(all: &[Vec<u8>], indices: &[usize]) -> Result<Vec<Vec
     if indices.is_empty() {
         return Err(ApiError::invalid(
             "invalid_selection",
-            "Select at least one certificate.",
+            "backend.error.emptySelection",
         ));
     }
 
@@ -67,7 +67,7 @@ pub fn select_certificates(all: &[Vec<u8>], indices: &[usize]) -> Result<Vec<Vec
     if sorted.len() != indices.len() {
         return Err(ApiError::invalid(
             "invalid_selection",
-            "The certificate selection contains duplicates.",
+            "backend.error.duplicateSelection",
         ));
     }
 
@@ -75,10 +75,7 @@ pub fn select_certificates(all: &[Vec<u8>], indices: &[usize]) -> Result<Vec<Vec
         .into_iter()
         .map(|index| {
             all.get(index).cloned().ok_or_else(|| {
-                ApiError::invalid(
-                    "invalid_selection",
-                    "The certificate selection is out of range.",
-                )
+                ApiError::invalid("invalid_selection", "backend.error.selectionOutOfRange")
             })
         })
         .collect()
@@ -120,7 +117,8 @@ mod tests {
 
     #[test]
     fn rejects_duplicate_selection() {
-        assert!(select_certificates(&[vec![0]], &[0, 0]).is_err());
+        let error = select_certificates(&[vec![0]], &[0, 0]).unwrap_err();
+        assert_eq!(error.message.key, "backend.error.duplicateSelection");
     }
 
     #[test]

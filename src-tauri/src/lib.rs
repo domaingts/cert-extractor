@@ -5,6 +5,7 @@ mod error;
 mod output;
 mod state;
 mod tls;
+mod ui_message;
 
 use state::AppState;
 

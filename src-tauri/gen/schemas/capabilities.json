@@ -1,1 +1,1 @@
-{"main-capability":{"identifier":"main-capability","description":"Permissions required by the certificate extractor window","local":true,"windows":["main"],"permissions":["core:default","dialog:allow-save","fs:allow-write-file","clipboard-manager:allow-write-text"]}}
+{"main-capability":{"identifier":"main-capability","description":"Permissions required by the certificate extractor window","local":true,"windows":["main"],"permissions":["core:default","core:window:allow-set-title","dialog:allow-save","fs:allow-write-file","clipboard-manager:allow-write-text"]}}
