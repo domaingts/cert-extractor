@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="background" x1="128" y1="96" x2="896" y2="928" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3972F6"/>
+      <stop offset="1" stop-color="#173EB8"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="326" y1="224" x2="704" y2="734" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E8F0FF"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="572" y1="552" x2="826" y2="868" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2CD6B1"/>
+      <stop offset="1" stop-color="#079477"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="34" stdDeviation="34" flood-color="#071A57" flood-opacity="0.32"/>
+    </filter>
+    <filter id="badgeShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#071A57" flood-opacity="0.30"/>
+    </filter>
+  </defs>
+
+  <rect x="64" y="64" width="896" height="896" rx="224" fill="url(#background)"/>
+  <path d="M157 369C222 186 374 99 564 99c135 0 248 41 339 135" fill="none" stroke="#75A0FF" stroke-width="34" stroke-linecap="round" opacity="0.32"/>
+
+  <g filter="url(#shadow)">
+    <path d="M300 214h291l151 151v380c0 44-36 80-80 80H300c-44 0-80-36-80-80V294c0-44 36-80 80-80Z" fill="url(#paper)"/>
+    <path d="M591 214v105c0 25 21 46 46 46h105" fill="#C9D9FC"/>
+    <path d="m591 214 151 151H637c-25 0-46-21-46-46V214Z" fill="#DCE7FF"/>
+
+    <rect x="306" y="354" width="219" height="34" rx="17" fill="#2758D6"/>
+    <rect x="306" y="431" width="342" height="27" rx="13.5" fill="#89A6E8"/>
+    <rect x="306" y="492" width="298" height="27" rx="13.5" fill="#A5B9E8"/>
+    <rect x="306" y="553" width="238" height="27" rx="13.5" fill="#A5B9E8"/>
+
+    <circle cx="373" cy="686" r="68" fill="#E2EAFC" stroke="#2758D6" stroke-width="24"/>
+    <path d="m342 686 22 22 43-49" fill="none" stroke="#2758D6" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="m337 742-20 70 56-28 56 28-20-70" fill="#2758D6"/>
+  </g>
+
+  <g filter="url(#badgeShadow)">
+    <path d="M699 525c61 43 113 52 152 54v126c0 107-62 177-152 213-90-36-152-106-152-213V579c39-2 91-11 152-54Z" fill="url(#shield)" stroke="#FFFFFF" stroke-width="24" stroke-linejoin="round"/>
+    <path d="m629 708 48 48 96-110" fill="none" stroke="#FFFFFF" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

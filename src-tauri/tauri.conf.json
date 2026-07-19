@@ -32,7 +32,7 @@
     "longDescription": "Connects to a TLS server, displays its server-presented certificate chain, and exports selected certificates as PEM or a C-style string expression.",
     "windows": {
       "nsis": {
-        "installerIcon": null,
+        "installerIcon": "icons/icon.ico",
         "installMode": "currentUser",
         "displayLanguageSelector": false
       },
