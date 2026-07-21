@@ -37,6 +37,26 @@ pub struct ValidationResult {
     pub technical_detail: Option<String>,
 }
 
+impl ValidationResult {
+    fn trusted_result(detail_message: Option<UiMessage>, technical_detail: Option<String>) -> Self {
+        Self {
+            status: "trusted".into(),
+            message: UiMessage::new("backend.validation.trusted"),
+            detail_message,
+            technical_detail,
+        }
+    }
+
+     fn skipped_result() -> Self {
+        Self {
+            status: "not_checked".into(),
+            message: UiMessage::new("backend.validation.skipped"),
+            detail_message: None,
+            technical_detail: Some("Post-handshake system trust validation was skipped".into()),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct TlsExtraction {
     pub certificates: Vec<Vec<u8>>,
@@ -96,7 +116,11 @@ impl ServerCertVerifier for InspectionVerifier {
     }
 }
 
-pub async fn extract<F>(endpoint: &Endpoint, mut progress: F) -> Result<TlsExtraction, ApiError>
+pub async fn extract<F>(
+    endpoint: &Endpoint,
+    mut progress: F,
+    skip_post_verification: bool,
+) -> Result<TlsExtraction, ApiError>
 where
     F: FnMut(&str, UiMessage),
 {
@@ -244,6 +268,14 @@ where
             .map(|suite| format!("{:?}", suite.suite())),
     };
 
+    if skip_post_verification {
+        return Ok(TlsExtraction {
+            certificates,
+            connection: connection_summary,
+            validation: ValidationResult::skipped_result(),
+        });
+    }
+
     progress(
         "validating_certificate",
         UiMessage::new("backend.progress.checkingSystemTrust"),
@@ -315,15 +347,13 @@ fn validate_chain(endpoint: &Endpoint, certificates: &[CertificateDer<'_>]) -> V
     );
 
     match result {
-        Ok(_) => ValidationResult {
-            status: "trusted".into(),
-            message: UiMessage::new("backend.validation.trusted"),
-            detail_message: (root_error_count > 0).then(|| {
+        Ok(_) => ValidationResult::trusted_result(
+            (root_error_count > 0).then(|| {
                 UiMessage::new("backend.validation.trustAnchorsSkipped")
                     .number("count", root_error_count)
             }),
-            technical_detail: None,
-        },
+            None,
+        ),
         Err(error) => {
             let detail = error.to_string();
             let normalized = format!("{error:?} {detail}").to_ascii_lowercase();
