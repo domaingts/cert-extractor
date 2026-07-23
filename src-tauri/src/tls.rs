@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::client::WebPkiServerVerifier;
-use rustls::crypto::{verify_tls12_signature, verify_tls13_signature, CryptoProvider};
+use rustls::crypto::CryptoProvider;
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{ClientConfig, DigitallySignedStruct, RootCertStore, SignatureScheme};
 use serde::Serialize;
@@ -46,15 +46,6 @@ impl ValidationResult {
             technical_detail,
         }
     }
-
-     fn skipped_result() -> Self {
-        Self {
-            status: "not_checked".into(),
-            message: UiMessage::new("backend.validation.skipped"),
-            detail_message: None,
-            technical_detail: Some("Post-handshake system trust validation was skipped".into()),
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -83,30 +74,20 @@ impl ServerCertVerifier for InspectionVerifier {
 
     fn verify_tls12_signature(
         &self,
-        message: &[u8],
-        certificate: &CertificateDer<'_>,
-        signature: &DigitallySignedStruct,
+        _message: &[u8],
+        _certificate: &CertificateDer<'_>,
+        _signature: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        verify_tls12_signature(
-            message,
-            certificate,
-            signature,
-            &self.provider.signature_verification_algorithms,
-        )
+        Ok(HandshakeSignatureValid::assertion())
     }
 
     fn verify_tls13_signature(
         &self,
-        message: &[u8],
-        certificate: &CertificateDer<'_>,
-        signature: &DigitallySignedStruct,
+        _message: &[u8],
+        _certificate: &CertificateDer<'_>,
+        _signature: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        verify_tls13_signature(
-            message,
-            certificate,
-            signature,
-            &self.provider.signature_verification_algorithms,
-        )
+        Ok(HandshakeSignatureValid::assertion())
     }
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
@@ -116,11 +97,7 @@ impl ServerCertVerifier for InspectionVerifier {
     }
 }
 
-pub async fn extract<F>(
-    endpoint: &Endpoint,
-    mut progress: F,
-    skip_post_verification: bool,
-) -> Result<TlsExtraction, ApiError>
+pub async fn extract<F>(endpoint: &Endpoint, mut progress: F) -> Result<TlsExtraction, ApiError>
 where
     F: FnMut(&str, UiMessage),
 {
@@ -268,14 +245,6 @@ where
             .map(|suite| format!("{:?}", suite.suite())),
     };
 
-    if skip_post_verification {
-        return Ok(TlsExtraction {
-            certificates,
-            connection: connection_summary,
-            validation: ValidationResult::skipped_result(),
-        });
-    }
-
     progress(
         "validating_certificate",
         UiMessage::new("backend.progress.checkingSystemTrust"),
@@ -370,6 +339,14 @@ fn validate_chain(endpoint: &Endpoint, certificates: &[CertificateDer<'_>]) -> V
             } else if normalized.contains("unknownissuer") || normalized.contains("unknown issuer")
             {
                 ("untrusted", "backend.validation.untrusted")
+            } else if normalized.contains("unsupportedcertversion")
+                || normalized.contains("unsupported cert version")
+                || normalized.contains("unsupported certificate version")
+            {
+                (
+                    "unsupported_certificate_version",
+                    "backend.validation.unsupportedCertificateVersion",
+                )
             } else {
                 ("validation_failed", "backend.validation.failed")
             };
@@ -380,5 +357,62 @@ fn validate_chain(endpoint: &Endpoint, certificates: &[CertificateDer<'_>]) -> V
                 technical_detail: Some(detail),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::endpoint::Endpoint;
+
+    // Set these manually to exercise a real TLS endpoint.
+    const TEST_HOST: &str = "jxeuuat.joysonquin.com";
+    const TEST_PORT: u16 = 31900;
+
+    #[test]
+    #[ignore = "network: edit TEST_HOST/TEST_PORT, then run with -- --ignored extract_existing_website"]
+    fn extract_existing_website() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+
+        let endpoint = Endpoint::parse(TEST_HOST, TEST_PORT).expect("invalid TEST_HOST/TEST_PORT");
+        let runtime = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
+
+        let extracted = runtime
+            .block_on(extract(&endpoint, |stage, message| {
+                eprintln!("progress: {stage} -> {}", message.key);
+            }))
+            .unwrap_or_else(|error| {
+                panic!(
+                    "extract failed: code={} stage={} detail={:?}",
+                    error.code, error.stage, error.technical_detail
+                );
+            });
+
+        assert!(
+            !extracted.certificates.is_empty(),
+            "expected at least one certificate from {TEST_HOST}:{TEST_PORT}"
+        );
+        assert!(!extracted.connection.connected_address.is_empty());
+        assert!(
+            extracted.connection.tls_version.is_some(),
+            "expected negotiated TLS version"
+        );
+        assert!(
+            extracted.connection.cipher_suite.is_some(),
+            "expected negotiated cipher suite"
+        );
+        assert!(
+            !extracted.validation.status.is_empty(),
+            "validation status should be set"
+        );
+
+        eprintln!(
+            "connected={} tls={:?} cipher={:?} validation={} certs={}",
+            extracted.connection.connected_address,
+            extracted.connection.tls_version,
+            extracted.connection.cipher_suite,
+            extracted.validation.status,
+            extracted.certificates.len()
+        );
     }
 }

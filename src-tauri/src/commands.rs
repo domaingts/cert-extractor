@@ -84,8 +84,7 @@ pub async fn extract_certificates(
     );
     let endpoint = crate::endpoint::Endpoint::parse(&request.hostname, request.port)?;
     let endpoint_display = endpoint.display();
-    // TODO: implement the skip_post_verification logic later.
-    let extracted = tls::extract(&endpoint, &mut send_progress, true).await?;
+    let extracted = tls::extract(&endpoint, &mut send_progress).await?;
 
     send_progress(
         "parsing_certificates",
