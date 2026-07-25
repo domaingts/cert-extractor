@@ -103,7 +103,7 @@ mod tests {
         let output = c_expression_for_certificates(&[vec![1, 2, 3]]);
         assert!(output.starts_with("\"-----BEGIN CERTIFICATE-----\n\" +\r\n"));
         assert!(output.ends_with("\"-----END CERTIFICATE-----\\n\""));
-        assert!(!output.ends_with(''));
+        assert!(!output.ends_with(""));
     }
 
     #[test]
