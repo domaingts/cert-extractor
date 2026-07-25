@@ -26,10 +26,7 @@ pub fn c_expression_for_certificates(certificates: &[Vec<u8>]) -> String {
     lines
         .iter()
         .enumerate()
-        .map(|(index, line)| {
-            let suffix = if index + 1 == lines.len() { "" } else { " +" };
-            format!("\"{}\\r\\n\"{}", escape_c_string(line), suffix)
-        })
+        .map(|(_, line)| format!("\"{}\\n\"", escape_c_string(line)))
         .collect::<Vec<_>>()
         .join("\r\n")
 }
@@ -104,9 +101,9 @@ mod tests {
     #[test]
     fn c_expression_contains_literal_newlines_and_no_trailing_plus() {
         let output = c_expression_for_certificates(&[vec![1, 2, 3]]);
-        assert!(output.starts_with("\"-----BEGIN CERTIFICATE-----\\r\\n\" +\r\n"));
-        assert!(output.ends_with("\"-----END CERTIFICATE-----\\r\\n\""));
-        assert!(!output.ends_with('+'));
+        assert!(output.starts_with("\"-----BEGIN CERTIFICATE-----\n\" +\r\n"));
+        assert!(output.ends_with("\"-----END CERTIFICATE-----\\n\""));
+        assert!(!output.ends_with(''));
     }
 
     #[test]
