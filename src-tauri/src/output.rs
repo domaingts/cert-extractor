@@ -25,8 +25,7 @@ pub fn c_expression_for_certificates(certificates: &[Vec<u8>]) -> String {
         .collect();
     lines
         .iter()
-        .enumerate()
-        .map(|(_, line)| format!("\"{}\\n\"", escape_c_string(line)))
+        .map(|line| format!("\"{}\\n\"", escape_c_string(line)))
         .collect::<Vec<_>>()
         .join("\r\n")
 }
